@@ -37,18 +37,33 @@ class SpeechEngine:
 
     @staticmethod
     def _select_english_voice(voices: list) -> Optional[str]:
-        """Pick an English voice if available."""
+        """Pick an English voice if available (robust to locale naming)."""
         preferred = [
             "com.apple.speech.synthesis.voice.samantha",
             "com.apple.speech.synthesis.voice.alex",
             "com.apple.speech.synthesis.voice.ava",
             "com.apple.speech.synthesis.voice.victoria",
         ]
+
+        def is_english(voice_id: str) -> bool:
+            low = voice_id.lower()
+            return (
+                "samantha" in low
+                or "alex" in low
+                or "ava" in low
+                or "victoria" in low
+                or ".en_" in low
+                or ".en-" in low
+                or low.endswith(".english")
+            )
+
+        normalized = [str(v) for v in voices]
+
         for vid in preferred:
-            if vid in voices:
+            if vid in normalized:
                 return vid
-        for vid in voices:
-            if ".en_" in vid or vid.endswith(".en"):
+        for vid in normalized:
+            if is_english(vid):
                 return vid
         return None
 
