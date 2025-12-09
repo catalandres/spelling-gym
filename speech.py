@@ -39,35 +39,55 @@ class SpeechEngine:
 
     @staticmethod
     def _select_english_voice(voices: list) -> Optional[str]:
-        """Pick an English voice if available (robust to locale naming)."""
-        preferred = [
-            "com.apple.speech.synthesis.voice.samantha.premium",
-            "com.apple.speech.synthesis.voice.samantha",
-            "com.apple.speech.synthesis.voice.alex",
-            "com.apple.speech.synthesis.voice.ava.premium",
-            "com.apple.speech.synthesis.voice.ava",
-            "com.apple.speech.synthesis.voice.victoria",
-            "com.apple.speech.synthesis.voice.kate",
-            "com.apple.speech.synthesis.voice.serena",
-            "com.apple.speech.synthesis.voice.daniel",
-            "com.apple.speech.synthesis.voice.moira",
-        ]
+        """Pick an English voice with locale and quality preferences."""
 
-        def is_english(voice_id: str) -> bool:
-            low = voice_id.lower()
-            return (
-                "samantha" in low
-                or "alex" in low
-                or "ava" in low
-                or "victoria" in low
-                or "kate" in low
-                or "serena" in low
-                or "daniel" in low
-                or "moira" in low
-                or ".en_" in low
-                or ".en-" in low
-                or low.endswith(".english")
+        def norm_list(vs: list) -> list[str]:
+            return [str(v) for v in vs]
+
+        def is_en_us(vid: str) -> bool:
+            low = vid.lower()
+            return "en-us" in low or "en_us" in low
+
+        def is_en_gb(vid: str) -> bool:
+            low = vid.lower()
+            return "en-gb" in low or "en_gb" in low
+
+        def is_en_au(vid: str) -> bool:
+            low = vid.lower()
+            return "en-au" in low or "en_au" in low
+
+        def is_en_other(vid: str) -> bool:
+            low = vid.lower()
+            return (".en-" in low or ".en_" in low) and not (
+                is_en_us(vid) or is_en_gb(vid) or is_en_au(vid)
             )
+
+        def is_enhanced(vid: str) -> bool:
+            return "com.apple.voice.enhanced." in vid.lower()
+
+        def is_compact(vid: str) -> bool:
+            return "com.apple.voice.compact." in vid.lower()
+
+        def pick_prioritized(cands: list[str]) -> Optional[str]:
+            if not cands:
+                return None
+            sams = [v for v in cands if "samantha" in v.lower()]
+            if sams:
+                return sorted(sams, key=str.lower)[0]
+            return sorted(cands, key=str.lower)[0]
+
+        def choose_for_locale(cands: list[str]) -> Optional[str]:
+            if not cands:
+                return None
+            enhanced = [v for v in cands if is_enhanced(v)]
+            choice = pick_prioritized(enhanced)
+            if choice:
+                return choice
+            compact = [v for v in cands if is_compact(v)]
+            choice = pick_prioritized(compact)
+            if choice:
+                return choice
+            return pick_prioritized(cands)
 
         env_voice = os.getenv("SPELL_GYM_VOICE_ID")
         if env_voice:
@@ -76,14 +96,28 @@ class SpeechEngine:
                 if str(vid).lower() == env_voice_norm:
                     return str(vid)
 
-        normalized = [str(v) for v in voices]
+        normalized = norm_list(voices)
 
-        for vid in preferred:
-            if vid in normalized:
-                return vid
-        for vid in normalized:
-            if is_english(vid):
-                return vid
+        en_us = [v for v in normalized if is_en_us(v)]
+        choice = choose_for_locale(en_us)
+        if choice:
+            return choice
+
+        en_gb = [v for v in normalized if is_en_gb(v)]
+        choice = choose_for_locale(en_gb)
+        if choice:
+            return choice
+
+        en_au = [v for v in normalized if is_en_au(v)]
+        choice = choose_for_locale(en_au)
+        if choice:
+            return choice
+
+        en_other = [v for v in normalized if is_en_other(v)]
+        choice = choose_for_locale(en_other)
+        if choice:
+            return choice
+
         return None
 
     def speak(self, text: str) -> None:
