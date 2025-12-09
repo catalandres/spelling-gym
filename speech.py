@@ -1,5 +1,6 @@
 """Speech helper for low-latency macOS text-to-speech."""
 
+import os
 import subprocess
 import sys
 import time
@@ -23,6 +24,7 @@ class SpeechEngine:
             voice_id = self._select_english_voice(available)
             if voice_id is not None:
                 self._synth = NSSpeechSynthesizer.alloc().initWithVoice_(voice_id)
+                print(f"Using speech engine voice: {voice_id}")
             else:
                 self._synth = NSSpeechSynthesizer.alloc().init()
                 self._warned_no_english_voice = True
@@ -39,10 +41,16 @@ class SpeechEngine:
     def _select_english_voice(voices: list) -> Optional[str]:
         """Pick an English voice if available (robust to locale naming)."""
         preferred = [
+            "com.apple.speech.synthesis.voice.samantha.premium",
             "com.apple.speech.synthesis.voice.samantha",
             "com.apple.speech.synthesis.voice.alex",
+            "com.apple.speech.synthesis.voice.ava.premium",
             "com.apple.speech.synthesis.voice.ava",
             "com.apple.speech.synthesis.voice.victoria",
+            "com.apple.speech.synthesis.voice.kate",
+            "com.apple.speech.synthesis.voice.serena",
+            "com.apple.speech.synthesis.voice.daniel",
+            "com.apple.speech.synthesis.voice.moira",
         ]
 
         def is_english(voice_id: str) -> bool:
@@ -52,10 +60,21 @@ class SpeechEngine:
                 or "alex" in low
                 or "ava" in low
                 or "victoria" in low
+                or "kate" in low
+                or "serena" in low
+                or "daniel" in low
+                or "moira" in low
                 or ".en_" in low
                 or ".en-" in low
                 or low.endswith(".english")
             )
+
+        env_voice = os.getenv("SPELL_GYM_VOICE_ID")
+        if env_voice:
+            env_voice_norm = env_voice.strip().lower()
+            for vid in voices:
+                if str(vid).lower() == env_voice_norm:
+                    return str(vid)
 
         normalized = [str(v) for v in voices]
 
@@ -81,11 +100,12 @@ class SpeechEngine:
             )
             self._warned_fallback = True
 
+        say_voice = os.getenv("SPELL_GYM_SAY_VOICE", self._say_voice)
         try:
-            subprocess.run(["say", "-v", self._say_voice, text], check=True)
+            subprocess.run(["say", "-v", say_voice, text], check=True)
         except subprocess.CalledProcessError:
             print(
-                f"Warning: Voice '{self._say_voice}' unavailable; falling back to system default.",
+                f"Warning: Voice '{say_voice}' unavailable; falling back to system default.",
                 file=sys.stderr,
             )
             subprocess.run(["say", text], check=True)
