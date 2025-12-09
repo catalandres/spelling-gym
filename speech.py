@@ -13,17 +13,25 @@ class SpeechEngine:
         self._use_pyobjc = False
         self._synth = None  # type: Optional[object]
         self._warned_fallback = False
+        self._warned_no_english_voice = False
         self._say_voice = "Samantha"  # English voice for `say`
 
         try:
             from AppKit import NSSpeechSynthesizer  # type: ignore
 
-            self._synth = NSSpeechSynthesizer.alloc().init()
-            self._use_pyobjc = True
-
-            voice_id = self._select_english_voice(NSSpeechSynthesizer.availableVoices())
+            available = NSSpeechSynthesizer.availableVoices()
+            voice_id = self._select_english_voice(available)
             if voice_id is not None:
-                self._synth.setVoice_(voice_id)
+                self._synth = NSSpeechSynthesizer.alloc().initWithVoice_(voice_id)
+            else:
+                self._synth = NSSpeechSynthesizer.alloc().init()
+                self._warned_no_english_voice = True
+                print(
+                    "Warning: No English voice found; using system default voice.",
+                    file=sys.stderr,
+                )
+
+            self._use_pyobjc = self._synth is not None
         except Exception:
             self._use_pyobjc = False
 
@@ -61,6 +69,10 @@ class SpeechEngine:
         try:
             subprocess.run(["say", "-v", self._say_voice, text], check=True)
         except subprocess.CalledProcessError:
+            print(
+                f"Warning: Voice '{self._say_voice}' unavailable; falling back to system default.",
+                file=sys.stderr,
+            )
             subprocess.run(["say", text], check=True)
         except FileNotFoundError:
             print("Error: macOS 'say' command is not available.", file=sys.stderr)
