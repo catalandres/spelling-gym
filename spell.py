@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Ten-word spelling drill using macOS speech."""
+"""Spelling drill using macOS speech."""
 
 import pathlib
 import random
 import sys
 import termios
 import tty
-from typing import List
+from typing import List, Tuple
 
 
 LISTS_DIR = pathlib.Path(__file__).resolve().parent / "lists"
@@ -28,8 +28,13 @@ def gather_words(lists_dir: pathlib.Path) -> List[str]:
 from speech import speak
 
 
-def capture_input_with_audio(prompt: str = "> ") -> str:
-    """Read characters without echo; speak each one as it is typed."""
+def capture_input_with_audio(prompt: str = "> ", repeat_word: str | None = None) -> Tuple[str, int]:
+    """Read characters without echo; speak each one as it is typed.
+
+    Backspace/delete clears the buffer, increments a retry counter, and, if
+    provided, re-speaks the current target word.
+    Returns (typed_text, retries_from_backspace).
+    """
     sys.stdout.write(prompt)
     sys.stdout.flush()
 
@@ -41,6 +46,7 @@ def capture_input_with_audio(prompt: str = "> ") -> str:
         termios.tcsetattr(fd, termios.TCSADRAIN, new_attrs)
 
         typed: List[str] = []
+        backspace_retries = 0
         while True:
             ch = sys.stdin.read(1)
             if ch in ("\n", "\r"):
@@ -50,32 +56,52 @@ def capture_input_with_audio(prompt: str = "> ") -> str:
             if ch == "\x03":  # Ctrl-C
                 raise KeyboardInterrupt
             if ch in ("\x7f", "\b"):  # Backspace/delete
-                if typed:
-                    typed.pop()
-                    speak("backspace")
+                typed.clear()
+                backspace_retries += 1
+                speak("start over")
+                if repeat_word:
+                    speak(repeat_word)
                 continue
             typed.append(ch)
             speak(ch)
-        return "".join(typed)
+        return "".join(typed), backspace_retries
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_attrs)
 
 
+def parse_round_count() -> int:
+    """Parse optional first CLI argument as number of words."""
+    if len(sys.argv) < 2:
+        return 10
+    try:
+        value = int(sys.argv[1])
+    except ValueError:
+        raise SystemExit("First argument must be an integer word count")
+    if value <= 0:
+        raise SystemExit("Word count must be positive")
+    return value
+
+
 def main() -> None:
     words = gather_words(LISTS_DIR)
-    round_count = 10
+    round_count = parse_round_count()
     if len(words) < round_count:
         raise RuntimeError(f"Need at least {round_count} words; found {len(words)} in {LISTS_DIR}")
 
     game_words = random.sample(words, round_count)
     score = 0
+    total_retries = 0
 
     for idx, target in enumerate(game_words, start=1):
-        print(f"Word {idx} of {round_count}: listen carefully...")
+        print(f"Word {idx} of {round_count}. Press Enter when you're ready.")
+        input()
+
+        print("Listen carefully...")
         speak(target)
         print("Type the spelling; input is hidden and spoken back as you type. Press Enter when done.")
 
-        user_input = capture_input_with_audio()
+        user_input, retries_from_backspace = capture_input_with_audio(repeat_word=target)
+        total_retries += retries_from_backspace
         is_correct = user_input == target
         if is_correct:
             score += 1
@@ -90,7 +116,9 @@ def main() -> None:
         speak(f"Score is {score} out of {idx}")
 
     print(f"Final score: {score} / {round_count}")
+    print(f"Total retries: {total_retries}")
     speak(f"Final score {score} out of {round_count}")
+    speak(f"Total retries {total_retries}")
 
 
 if __name__ == "__main__":

@@ -20,18 +20,19 @@ A tiny practice script: the computer says 10 random words, you type them without
 7) Install the needed voice helper: `pip install -r requirements.txt`.
    - This installs `pyobjc`, which makes the voice fast. If it ever fails, you can still run the game; it will fall back to macOS `say` but may be slower.
 
-## How to run a practice round (10 words)
+## How to run a practice round (default 10 words)
 
 1) Make sure the venv is on. If you see `(.venv)` in your prompt, you are good. If not, run `source .venv/bin/activate` from this folder.
-2) Start the game: `python3 spell.py`.
-3) For each of the 10 words:
-   - Listen: the computer will say a word.
-   - Type the word. You will not see the letters, but you will hear each letter you type.
-     - If you make a mistake, press Backspace; you will hear "backspace".
-   - Press Enter when you finish the word.
-   - The screen will show the target word, what you typed, and if it was correct.
-   - The computer will also say what you typed, say if it was correct or not, and say your score so far.
-4) At the end of 10 words, the screen (and the computer) will tell you your final score.
+2) Start the game (optionally choose word count): `python3 spell.py` or `python3 spell.py 50` for 50 words.
+3) For each word:
+    - Press Enter when you are ready to hear it.
+    - Listen: the computer will say the word.
+    - Type the word. You will not see the letters, but you will hear each letter you type.
+       - If you press Backspace, your attempt clears, the word is spoken again, and this counts as a retry.
+    - Press Enter when you finish the word. If it is wrong, the game moves on to the next word (no re-tries for wrong answers).
+    - The screen will show the target word, what you typed, and if it was correct.
+    - The computer will also say what you typed, say if it was correct or not, and say your score so far.
+4) At the end, the screen (and the computer) will tell you your final score and total retries (backspaces).
 
 ## Tips
 
