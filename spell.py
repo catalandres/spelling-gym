@@ -12,14 +12,43 @@ from typing import List, Tuple
 LISTS_DIR = pathlib.Path(__file__).resolve().parent / "lists"
 
 
-def gather_words(lists_dir: pathlib.Path) -> List[str]:
-    """Collect non-empty lines from all .txt files under lists_dir."""
-    words: List[str] = []
-    for path in sorted(lists_dir.glob("*.txt")):
+def gather_words(lists_dir: pathlib.Path, file_name: str | None = None) -> List[Tuple[str, List[str]]]:
+    """Collect non-empty lines from .txt files under lists_dir.
+
+    If `file_name` is provided, only that file (must end with .txt) is read.
+    Otherwise all `*.txt` files under `lists_dir` are used.
+    """
+    words: List[Tuple[str, List[str]]] = []
+    if file_name:
+        # Allow filenames provided without the .txt suffix
+        if not file_name.endswith(".txt"):
+            file_name = f"{file_name}.txt"
+        path = lists_dir / file_name
+        if not path.exists():
+            raise SystemExit(f"Requested file not found: {path}")
         for line in path.read_text(encoding="utf-8").splitlines():
-            word = line.strip()
-            if word:
-                words.append(word)
+            raw = line.strip()
+            if not raw:
+                continue
+            # Support variant spellings separated by ' OR '
+            parts = [p.strip() for p in raw.split(" OR ") if p.strip()]
+            if not parts:
+                continue
+            display = parts[0]
+            variants = parts
+            words.append((display, variants))
+    else:
+        for path in sorted(lists_dir.glob("*.txt")):
+            for line in path.read_text(encoding="utf-8").splitlines():
+                raw = line.strip()
+                if not raw:
+                    continue
+                parts = [p.strip() for p in raw.split(" OR ") if p.strip()]
+                if not parts:
+                    continue
+                display = parts[0]
+                variants = parts
+                words.append((display, variants))
     if not words:
         raise RuntimeError(f"No words found in {lists_dir}")
     return words
@@ -82,8 +111,16 @@ def parse_round_count() -> int:
     return value
 
 
+def parse_optional_filename() -> str | None:
+    """Return optional filename from `sys.argv[2]`, or None if not provided."""
+    if len(sys.argv) < 3:
+        return None
+    return sys.argv[2]
+
+
 def main() -> None:
-    words = gather_words(LISTS_DIR)
+    filename = parse_optional_filename()
+    words = gather_words(LISTS_DIR, file_name=filename)
     round_count = parse_round_count()
     if len(words) < round_count:
         raise RuntimeError(f"Need at least {round_count} words; found {len(words)} in {LISTS_DIR}")
@@ -92,23 +129,28 @@ def main() -> None:
     score = 0
     total_retries = 0
 
-    for idx, target in enumerate(game_words, start=1):
+    for idx, (display, variants) in enumerate(game_words, start=1):
         print(f"Word {idx} of {round_count}. Press Enter when you're ready.")
         input()
 
         print("Listen carefully...")
-        speak(target)
+        speak(display)
         print("Type the spelling; input is hidden and spoken back as you type. Press Enter when done.")
-
-        user_input, retries_from_backspace = capture_input_with_audio(repeat_word=target)
+        user_input, retries_from_backspace = capture_input_with_audio(repeat_word=display)
         total_retries += retries_from_backspace
-        is_correct = user_input == target
+        # Accept any of the variants as correct (case-insensitive match)
+        user_input_norm = user_input.lower()
+        variants_norm = [v.lower() for v in variants]
+        is_correct = user_input_norm in variants_norm
         if is_correct:
             score += 1
 
-        print(f"Target : {target}")
+        print(f"Target : {display}")
         print(f"You typed: {user_input}")
         print(f"Result : {'correct' if is_correct else 'incorrect'}")
+        # Show accepted variants for learning/clarity
+        if len(variants) > 1:
+            print(f"Accepted variants: {', '.join(variants)}")
         print(f"Score  : {score} / {idx}\n")
 
         speak(f"You typed {user_input or 'nothing'}")
